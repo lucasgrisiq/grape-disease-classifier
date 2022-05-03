@@ -4,6 +4,7 @@ from sklearn.metrics import classification_report, confusion_matrix
 from torchvision import datasets, transforms
 import numpy as np
 import matplotlib.pyplot as plt
+import pandas as pd
 
 
 def extract_data(_dir):
@@ -42,8 +43,7 @@ def preprocess(data, scaler):
 
     return [images, labels]
 
-def plot_confusion_matrix(cm, font_size=14, model=''):
-    fig, ax = plt.subplots(figsize=(5, 5))
+def plot_confusion_matrix(ax, cm, font_size=14, model=''):
     ax.set_title(f'Confusion Matrix for {model}', fontsize=font_size)
     ax.imshow(cm)
     ax.grid(False)
@@ -53,44 +53,46 @@ def plot_confusion_matrix(cm, font_size=14, model=''):
     for i in range(3):
         for j in range(3):
             ax.text(j, i, cm[i, j], ha='center', va='center', color='white')
-    fig.savefig(f'{model}_confusion_matrix.png')
-    plt.show()
+    ax.set_xlabel('Predicted', fontsize=font_size)
+    ax.set_ylabel('True', fontsize=font_size)
 
-def evaluate(model, X_train, y_train, X_test, y_test, model_name=''):
+def evaluate(model, X_train, y_train, X_test, y_test):
     results = {}
     y_pred = model.predict(X_test)
     results['train_score'] = model.score(X_train, y_train)
     results['test_score'] = model.score(X_test, y_test)
-    conf_m = confusion_matrix(y_test, y_pred)
+    results['conf_m'] = confusion_matrix(y_test, y_pred)
     results['report'] = classification_report(y_test, y_pred, output_dict=True)
-    report = classification_report(y_test, y_pred)
-    print(f'----- {model_name} -----')
-    print(' > Train accuracy: {:.2f}%'.format(results['train_score']*100))
-    print(' > Test score: {:.2f}%'.format(results['test_score']*100))
-    plot_confusion_matrix(conf_m, model=model_name)
-    print(f' > Classification Report:')
-    print(report)
     return results
 
 def table_results(results):
     from matplotlib.font_manager import FontProperties
     plt.rcParams["figure.autolayout"] = True
-    fig, ax = plt.subplots(figsize=(10, 5))
     columns = ('Model', 'Accuracy', 'F1-Score', 'Precision', 'Recall')
-    rows = []
-    for model, res in results.items():
-        macro_avg = res['report']['macro avg']
-        rows.append((model, np.round(res['test_score'], 4), np.round(
-            macro_avg['f1-score'], 4), np.round(macro_avg['precision'], 4), np.round(macro_avg['recall'], 4)))
-    rows = sorted(rows, key=lambda x: np.mean(x), reverse=True)
-    ax.axis('off')
-    table = ax.table(cellText=rows, colLabels=columns,
-                     loc='left', cellLoc='left', colLoc='left')
-    table.auto_set_font_size(False)
-    table.set_fontsize(14)
+    
+    for i, dataset in enumerate(results):
+        fig, ax = plt.subplots(figsize=(10, 5))
+        rows = []
+        for model, res in results[dataset].items():
+            macro_avg = res['report']['macro avg']
+            rows.append((model, np.round(res['test_score'], 4), np.round(
+                macro_avg['f1-score'], 4), np.round(macro_avg['precision'], 4), np.round(macro_avg['recall'], 4)))
+        rows = sorted(rows, key=lambda x: np.mean(x[1:]), reverse=True)
+        table = ax.table(loc='left', cellLoc='left', colLoc='left', cellText=rows, colLabels=columns)
 
-    for (row, col), cell in table.get_celld().items():
-        if row == 0:
-            cell.set_text_props(fontproperties=FontProperties(weight='bold', size=14))
-    fig.savefig('table_results.png')
+        ax.set_title(f'{dataset} Dataset', fontsize=14, loc='left', pad=0)
+        
+        # style
+        table.auto_set_font_size(False)
+        table.set_fontsize(14)
+        table.auto_set_column_width(col=range(len(rows)))
+
+        for (row, col), cell in table.get_celld().items():
+            if row == 0:
+                cell.set_text_props(fontproperties=FontProperties(weight='bold', size=14))
+
+        ax.axis('off')
+        fig.tight_layout()
+        fig.savefig(f'plots/{dataset}_table_results.png', bbox_inches='tight')
+
     plt.show()
